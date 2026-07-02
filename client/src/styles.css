@@ -60,6 +60,14 @@ button.danger {
   color: #ffffff;
 }
 
+button.iconDanger {
+  color: #a33b2f;
+}
+
+button.iconDanger:hover:not(:disabled) {
+  border-color: #d08f86;
+}
+
 input,
 select,
 textarea {
@@ -418,6 +426,14 @@ textarea:focus {
   color: #4b5c51;
   line-height: 1.55;
   margin-top: 8px;
+}
+
+.historyActions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .search {

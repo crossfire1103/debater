@@ -85,3 +85,15 @@ export async function addHistory(record) {
   await writeJson(historyPath, next);
   return item;
 }
+
+export async function deleteHistory(id) {
+  const history = await listHistory();
+  const next = history.filter((item) => item.id !== id);
+
+  if (next.length === history.length) {
+    return false;
+  }
+
+  await writeJson(historyPath, next);
+  return true;
+}

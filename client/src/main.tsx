@@ -13,6 +13,7 @@ import {
   Save,
   Settings,
   Square,
+  Trash2,
   Wand2,
 } from "lucide-react";
 import "./styles.css";
@@ -146,7 +147,9 @@ function App() {
             onNeedSettings={() => setView("settings")}
           />
         )}
-        {view === "history" && <HistoryPage history={history} />}
+        {view === "history" && (
+          <HistoryPage history={history} onDeleted={refreshHistory} />
+        )}
         {view === "settings" && (
           <SettingsPage
             settings={settings}
@@ -738,13 +741,39 @@ function TextBlock({ title, text }: { title: string; text: string }) {
   );
 }
 
-function HistoryPage({ history }: { history: HistoryRecord[] }) {
+function HistoryPage({
+  history,
+  onDeleted,
+}: {
+  history: HistoryRecord[];
+  onDeleted: () => Promise<void>;
+}) {
   const [query, setQuery] = useState("");
+  const [deletingId, setDeletingId] = useState("");
+  const [error, setError] = useState("");
   const filtered = history.filter((item) =>
     `${item.rawText} ${item.result.summaryTitle}`
       .toLowerCase()
       .includes(query.toLowerCase())
   );
+
+  async function deleteRecord(id: string) {
+    const confirmed = window.confirm("删除这条历史记录？");
+    if (!confirmed) return;
+
+    setDeletingId(id);
+    setError("");
+    try {
+      await api(`/api/history/${id}`, { method: "DELETE" });
+      await onDeleted();
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error ? deleteError.message : "删除失败。"
+      );
+    } finally {
+      setDeletingId("");
+    }
+  }
 
   return (
     <section className="workspace">
@@ -761,6 +790,8 @@ function HistoryPage({ history }: { history: HistoryRecord[] }) {
         />
       </header>
 
+      {error && <div className="notice error">{error}</div>}
+
       <div className="historyList">
         {filtered.length === 0 && <div className="empty">暂无历史记录。</div>}
         {filtered.map((item) => (
@@ -770,10 +801,21 @@ function HistoryPage({ history }: { history: HistoryRecord[] }) {
               <h2>{item.result.summaryTitle}</h2>
               <p>{item.result.polishedChinese}</p>
             </div>
-            <button onClick={() => copyText(item.result.polishedChinese)}>
-              <Copy size={16} />
-              <span>复制</span>
-            </button>
+            <div className="historyActions">
+              <button onClick={() => copyText(item.result.polishedChinese)}>
+                <Copy size={16} />
+                <span>复制</span>
+              </button>
+              <button
+                className="iconDanger"
+                onClick={() => deleteRecord(item.id)}
+                disabled={deletingId === item.id}
+                title="Delete"
+              >
+                <Trash2 size={16} />
+                <span>{deletingId === item.id ? "删除中" : "删除"}</span>
+              </button>
+            </div>
           </article>
         ))}
       </div>

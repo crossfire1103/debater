@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import express from "express";
 import {
   addHistory,
+  deleteHistory,
   getSettings,
   listHistory,
   saveSettings,
@@ -101,6 +102,19 @@ app.get(
   "/api/history",
   asyncRoute(async (_req, res) => {
     res.json(await listHistory());
+  })
+);
+
+app.delete(
+  "/api/history/:id",
+  asyncRoute(async (req, res) => {
+    const deleted = await deleteHistory(req.params.id);
+    if (!deleted) {
+      res.status(404).json({ error: "History record not found." });
+      return;
+    }
+
+    res.json({ ok: true });
   })
 );
 

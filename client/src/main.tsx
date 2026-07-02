@@ -182,10 +182,16 @@ function DictationPage({
   const channelRef = useRef<RTCDataChannel | null>(null);
   const finalizeTimerRef = useRef<number | null>(null);
   const commitIntervalRef = useRef<number | null>(null);
+  const recordingStateRef = useRef<RecordingState>("idle");
 
   const draftText = useMemo(() => {
     return [finalText, liveText].filter(Boolean).join(finalText ? " " : "");
   }, [finalText, liveText]);
+
+  function updateRecordingState(nextState: RecordingState) {
+    recordingStateRef.current = nextState;
+    setRecordingState(nextState);
+  }
 
   function logDebug(message: string, details?: unknown) {
     const time = new Date().toLocaleTimeString();
@@ -226,7 +232,7 @@ function DictationPage({
     setError("");
     setResult(null);
     setDebugLogs([]);
-    setRecordingState("connecting");
+    updateRecordingState("connecting");
     logDebug("开始创建实时听写会话");
 
     try {
@@ -285,11 +291,16 @@ function DictationPage({
             setConfirmedText((current) =>
               [current, transcript].filter(Boolean).join("\n")
             );
+          } else {
+            logDebug("收到空转写片段");
           }
           setLiveText("");
-          clearFinalizeTimer();
-          disconnectRealtime();
-          setRecordingState("stopped");
+
+          if (recordingStateRef.current === "finalizing") {
+            clearFinalizeTimer();
+            disconnectRealtime();
+            updateRecordingState("stopped");
+          }
         }
 
         if (message.type === "error") {
@@ -320,41 +331,41 @@ function DictationPage({
       });
 
       logDebug("WebRTC SDP 握手完成");
-      setRecordingState("recording");
+      updateRecordingState("recording");
     } catch (startError) {
       disconnectRealtime();
       setError(
         startError instanceof Error ? startError.message : "启动录音失败。"
       );
-      setRecordingState("idle");
+      updateRecordingState("idle");
     }
   }
 
   function stopRecording() {
-    if (recordingState !== "recording") {
+    if (recordingStateRef.current !== "recording") {
       disconnectRealtime();
-      setRecordingState("stopped");
+      updateRecordingState("stopped");
       return;
     }
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     clearCommitInterval();
-    setRecordingState("finalizing");
+    updateRecordingState("finalizing");
     logDebug("已停止麦克风，提交最后一段音频");
 
     if (sendAudioCommit("final")) {
       finalizeTimerRef.current = window.setTimeout(() => {
         logDebug("等待转写超时，已断开连接");
         disconnectRealtime();
-        setRecordingState("stopped");
+        updateRecordingState("stopped");
       }, 20000);
       return;
     }
 
     setError("Realtime data channel 尚未打开，无法提交音频。");
     disconnectRealtime();
-    setRecordingState("stopped");
+    updateRecordingState("stopped");
   }
 
   function clearFinalizeTimer() {
@@ -382,7 +393,7 @@ function DictationPage({
     setConfirmedText("");
     setResult(null);
     setError("");
-    setRecordingState("idle");
+    updateRecordingState("idle");
   }
 
   async function processText() {

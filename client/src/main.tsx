@@ -191,6 +191,8 @@ function DictationPage({
   const audioChunksRef = useRef<BlobPart[]>([]);
   const finalizeTimerRef = useRef<number | null>(null);
   const recordingStateRef = useRef<RecordingState>("idle");
+  const peerConnectedRef = useRef(false);
+  const dataChannelOpenRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioMeterFrameRef = useRef<number | null>(null);
 
@@ -201,6 +203,17 @@ function DictationPage({
   function updateRecordingState(nextState: RecordingState) {
     recordingStateRef.current = nextState;
     setRecordingState(nextState);
+  }
+
+  function markRemoteReady() {
+    if (
+      recordingStateRef.current === "connecting" &&
+      peerConnectedRef.current &&
+      dataChannelOpenRef.current
+    ) {
+      logDebug("实时听写已就绪，可以开始说话");
+      updateRecordingState("recording");
+    }
   }
 
   function logDebug(message: string, details?: unknown) {
@@ -311,6 +324,8 @@ function DictationPage({
     setError("");
     setResult(null);
     setDebugLogs([]);
+    peerConnectedRef.current = false;
+    dataChannelOpenRef.current = false;
     updateRecordingState("connecting");
     logDebug("开始创建实时听写会话");
 
@@ -349,11 +364,17 @@ function DictationPage({
       });
       peer.onconnectionstatechange = () => {
         logDebug("WebRTC connection state", peer.connectionState);
+        peerConnectedRef.current = peer.connectionState === "connected";
+        markRemoteReady();
       };
 
       const channel = peer.createDataChannel("oai-events");
       channelRef.current = channel;
-      channel.onopen = () => logDebug("Realtime data channel 已打开");
+      channel.onopen = () => {
+        dataChannelOpenRef.current = true;
+        logDebug("Realtime data channel 已打开");
+        markRemoteReady();
+      };
       channel.onclose = () => logDebug("Realtime data channel 已关闭");
       channel.onerror = () => logDebug("Realtime data channel 出错");
       channel.onmessage = (event) => {
@@ -421,7 +442,7 @@ function DictationPage({
       });
 
       logDebug("WebRTC SDP 握手完成");
-      updateRecordingState("recording");
+      markRemoteReady();
     } catch (startError) {
       disconnectRealtime();
       setError(
@@ -469,6 +490,8 @@ function DictationPage({
     channelRef.current = null;
     peerRef.current = null;
     streamRef.current = null;
+    peerConnectedRef.current = false;
+    dataChannelOpenRef.current = false;
   }
 
   function resetDraft() {
@@ -553,14 +576,20 @@ function DictationPage({
           <button
             className="danger"
             onClick={stopRecording}
-            disabled={recordingState === "finalizing"}
+            disabled={recordingState === "connecting" || recordingState === "finalizing"}
           >
-            {recordingState === "finalizing" ? (
+            {recordingState === "connecting" || recordingState === "finalizing" ? (
               <Loader2 className="spin" size={17} />
             ) : (
               <Square size={17} />
             )}
-            <span>{recordingState === "finalizing" ? "转写中" : "结束录音"}</span>
+            <span>
+              {recordingState === "connecting"
+                ? "准备中"
+                : recordingState === "finalizing"
+                  ? "转写中"
+                  : "结束录音"}
+            </span>
           </button>
         )}
         <button onClick={resetDraft} title="Reset">

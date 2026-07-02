@@ -51,12 +51,14 @@ export async function createRealtimeTranscriptionSession({
     },
     transcription: transcriptionConfig,
     ...(isRealtimeWhisper
-      ? {}
-      : {
-          turn_detection: {
-            type: "server_vad",
-          },
-        }),
+        ? {}
+        : {
+            turn_detection: {
+              type: "server_vad",
+              prefix_padding_ms: 800,
+              silence_duration_ms: 700,
+            },
+          }),
   };
 
   return openaiFetch("/realtime/client_secrets", {

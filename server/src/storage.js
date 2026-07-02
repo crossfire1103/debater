@@ -10,7 +10,7 @@ const historyPath = path.join(dataDir, "history.json");
 const defaultSettings = {
   apiKey: "",
   transcriptionModel: "gpt-4o-mini-transcribe",
-  processingModel: "gpt-4.1-mini",
+  processingModel: "gpt-5-mini",
   defaultLanguage: "zh",
   defaultStyle: "professional",
 };

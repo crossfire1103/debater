@@ -634,7 +634,7 @@ function SettingsPage({
   const [draft, setDraft] = useState<AppSettings>(
     settings || {
       apiKey: "",
-      transcriptionModel: "gpt-realtime-whisper",
+      transcriptionModel: "gpt-4o-mini-transcribe",
       processingModel: "gpt-4.1-mini",
       defaultLanguage: "zh",
       defaultStyle: "professional",
@@ -698,12 +698,16 @@ function SettingsPage({
 
         <label>
           <span>实时听写模型</span>
-          <input
+          <select
             value={draft.transcriptionModel}
             onChange={(event) =>
               setDraft({ ...draft, transcriptionModel: event.target.value })
             }
-          />
+          >
+            <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe</option>
+            <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
+            <option value="gpt-realtime-whisper">gpt-realtime-whisper</option>
+          </select>
         </label>
 
         <label>

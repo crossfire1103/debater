@@ -38,6 +38,30 @@ export async function createRealtimeTranscriptionSession({
   delay = "low",
 } = {}) {
   const settings = await getSettings({ includeSecret: true });
+  const transcriptionModel = settings.transcriptionModel;
+  const isRealtimeWhisper = transcriptionModel === "gpt-realtime-whisper";
+  const transcriptionConfig = {
+    model: transcriptionModel,
+    language: language || settings.defaultLanguage || undefined,
+    ...(isRealtimeWhisper ? { delay } : {}),
+  };
+  const inputConfig = {
+    format: {
+      type: "audio/pcm",
+      rate: 24000,
+    },
+    noise_reduction: {
+      type: "near_field",
+    },
+    transcription: transcriptionConfig,
+    ...(isRealtimeWhisper
+      ? {}
+      : {
+          turn_detection: {
+            type: "server_vad",
+          },
+        }),
+  };
 
   return openaiFetch("/realtime/client_secrets", {
     method: "POST",
@@ -49,23 +73,7 @@ export async function createRealtimeTranscriptionSession({
       session: {
         type: "transcription",
         audio: {
-          input: {
-            format: {
-              type: "audio/pcm",
-              rate: 24000,
-            },
-            noise_reduction: {
-              type: "near_field",
-            },
-            transcription: {
-              model: settings.transcriptionModel,
-              language: language || settings.defaultLanguage || undefined,
-              delay,
-            },
-            turn_detection: {
-              type: "server_vad",
-            },
-          },
+          input: inputConfig,
         },
       },
     }),

@@ -62,6 +62,9 @@ export async function createRealtimeTranscriptionSession({
               language: language || settings.defaultLanguage || undefined,
               delay,
             },
+            turn_detection: {
+              type: "server_vad",
+            },
           },
         },
       },

@@ -181,7 +181,6 @@ function DictationPage({
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
   const finalizeTimerRef = useRef<number | null>(null);
-  const commitIntervalRef = useRef<number | null>(null);
   const recordingStateRef = useRef<RecordingState>("idle");
 
   const draftText = useMemo(() => {
@@ -200,32 +199,6 @@ function DictationPage({
         ? ""
         : ` ${typeof details === "string" ? details : JSON.stringify(details)}`;
     setDebugLogs((current) => [`${time} ${message}${suffix}`, ...current].slice(0, 80));
-  }
-
-  function sendAudioCommit(reason: string) {
-    const channel = channelRef.current;
-    if (channel?.readyState !== "open") {
-      logDebug("跳过音频提交，data channel 未打开", reason);
-      return false;
-    }
-
-    channel.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
-    logDebug("已提交音频缓冲区", reason);
-    return true;
-  }
-
-  function startPeriodicCommits() {
-    clearCommitInterval();
-    commitIntervalRef.current = window.setInterval(() => {
-      sendAudioCommit("periodic");
-    }, 4000);
-  }
-
-  function clearCommitInterval() {
-    if (commitIntervalRef.current) {
-      window.clearInterval(commitIntervalRef.current);
-      commitIntervalRef.current = null;
-    }
   }
 
   async function startRecording() {
@@ -264,10 +237,7 @@ function DictationPage({
 
       const channel = peer.createDataChannel("oai-events");
       channelRef.current = channel;
-      channel.onopen = () => {
-        logDebug("Realtime data channel 已打开");
-        startPeriodicCommits();
-      };
+      channel.onopen = () => logDebug("Realtime data channel 已打开");
       channel.onclose = () => logDebug("Realtime data channel 已关闭");
       channel.onerror = () => logDebug("Realtime data channel 出错");
       channel.onmessage = (event) => {
@@ -350,22 +320,14 @@ function DictationPage({
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-    clearCommitInterval();
     updateRecordingState("finalizing");
-    logDebug("已停止麦克风，提交最后一段音频");
+    logDebug("已停止麦克风，等待服务端完成最后一段转写");
 
-    if (sendAudioCommit("final")) {
-      finalizeTimerRef.current = window.setTimeout(() => {
-        logDebug("等待转写超时，已断开连接");
-        disconnectRealtime();
-        updateRecordingState("stopped");
-      }, 20000);
-      return;
-    }
-
-    setError("Realtime data channel 尚未打开，无法提交音频。");
-    disconnectRealtime();
-    updateRecordingState("stopped");
+    finalizeTimerRef.current = window.setTimeout(() => {
+      logDebug("等待最后一段转写超时，已断开连接");
+      disconnectRealtime();
+      updateRecordingState("stopped");
+    }, 5000);
   }
 
   function clearFinalizeTimer() {
@@ -377,7 +339,6 @@ function DictationPage({
 
   function disconnectRealtime() {
     clearFinalizeTimer();
-    clearCommitInterval();
     channelRef.current?.close();
     peerRef.current?.close();
     streamRef.current?.getTracks().forEach((track) => track.stop());

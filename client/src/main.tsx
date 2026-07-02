@@ -212,6 +212,9 @@ function DictationPage({
       dataChannelOpenRef.current
     ) {
       logDebug("实时听写已就绪，可以开始说话");
+      if (streamRef.current && !mediaRecorderRef.current) {
+        startLocalRecording(streamRef.current);
+      }
       updateRecordingState("recording");
     }
   }
@@ -349,7 +352,6 @@ function DictationPage({
       streamRef.current = stream;
       logDebug("麦克风权限已取得");
       startAudioMeter(stream);
-      startLocalRecording(stream);
 
       const peer = new RTCPeerConnection();
       peerRef.current = peer;

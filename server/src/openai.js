@@ -46,10 +46,6 @@ export async function createRealtimeTranscriptionSession({
     ...(isRealtimeWhisper ? { delay } : {}),
   };
   const inputConfig = {
-    format: {
-      type: "audio/pcm",
-      rate: 24000,
-    },
     noise_reduction: {
       type: "near_field",
     },

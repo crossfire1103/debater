@@ -213,6 +213,33 @@ h2 {
   padding: 0 10px;
 }
 
+.micMeter {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5cf;
+  border-radius: 7px;
+  color: #4b5c51;
+  display: inline-flex;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+}
+
+.micMeter > div {
+  background: #dce4de;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+  width: 92px;
+}
+
+.micMeter i {
+  background: #176b4d;
+  display: block;
+  height: 100%;
+  transition: width 80ms linear;
+}
+
 .notice {
   border-radius: 7px;
   padding: 11px 13px;
@@ -313,6 +340,24 @@ textarea:focus {
   line-height: 1.7;
   margin: 0;
   padding: 16px 28px;
+}
+
+.recordingBody {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+}
+
+.recordingBody audio {
+  max-width: 520px;
+  width: 100%;
+}
+
+.recordingBody span {
+  color: #607166;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .debugPanel {

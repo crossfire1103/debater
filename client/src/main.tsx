@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import {
   Check,
   Copy,
+  Download,
   History,
   Loader2,
   Mic,
@@ -176,12 +177,19 @@ function DictationPage({
   const [isProcessing, setIsProcessing] = useState(false);
   const [style, setStyle] = useState("professional");
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [micLevel, setMicLevel] = useState(0);
+  const [recordingUrl, setRecordingUrl] = useState("");
+  const [recordingMimeType, setRecordingMimeType] = useState("");
 
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
   const finalizeTimerRef = useRef<number | null>(null);
   const recordingStateRef = useRef<RecordingState>("idle");
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioMeterFrameRef = useRef<number | null>(null);
 
   const draftText = useMemo(() => {
     return [finalText, liveText].filter(Boolean).join(finalText ? " " : "");
@@ -199,6 +207,101 @@ function DictationPage({
         ? ""
         : ` ${typeof details === "string" ? details : JSON.stringify(details)}`;
     setDebugLogs((current) => [`${time} ${message}${suffix}`, ...current].slice(0, 80));
+  }
+
+  function pickRecordingMimeType() {
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+    ];
+    return (
+      candidates.find((type) => MediaRecorder.isTypeSupported(type)) || ""
+    );
+  }
+
+  function startLocalRecording(stream: MediaStream) {
+    if (!window.MediaRecorder) {
+      logDebug("当前浏览器不支持 MediaRecorder");
+      return;
+    }
+
+    if (recordingUrl) {
+      URL.revokeObjectURL(recordingUrl);
+      setRecordingUrl("");
+    }
+
+    audioChunksRef.current = [];
+    const mimeType = pickRecordingMimeType();
+    const recorder = new MediaRecorder(
+      stream,
+      mimeType ? { mimeType } : undefined
+    );
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunksRef.current.push(event.data);
+      }
+    };
+    recorder.onstop = () => {
+      const type = recorder.mimeType || mimeType || "audio/webm";
+      const blob = new Blob(audioChunksRef.current, { type });
+      setRecordingMimeType(type);
+      setRecordingUrl(URL.createObjectURL(blob));
+      logDebug("本地录音已保存", {
+        bytes: blob.size,
+        type,
+      });
+    };
+    recorder.onerror = () => logDebug("本地录音器出错");
+
+    mediaRecorderRef.current = recorder;
+    recorder.start(1000);
+    logDebug("本地录音已开始", recorder.mimeType || mimeType || "default");
+  }
+
+  function stopLocalRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    mediaRecorderRef.current = null;
+  }
+
+  function startAudioMeter(stream: MediaStream) {
+    stopAudioMeter();
+    const audioContext = new AudioContext();
+    const analyser = audioContext.createAnalyser();
+    const source = audioContext.createMediaStreamSource(stream);
+    const samples = new Uint8Array(analyser.frequencyBinCount);
+
+    analyser.fftSize = 1024;
+    source.connect(analyser);
+    audioContextRef.current = audioContext;
+
+    function updateLevel() {
+      analyser.getByteTimeDomainData(samples);
+      let sum = 0;
+      samples.forEach((sample) => {
+        const value = sample - 128;
+        sum += value * value;
+      });
+      const rms = Math.sqrt(sum / samples.length);
+      setMicLevel(Math.min(1, rms / 32));
+      audioMeterFrameRef.current = window.requestAnimationFrame(updateLevel);
+    }
+
+    updateLevel();
+  }
+
+  function stopAudioMeter() {
+    if (audioMeterFrameRef.current) {
+      window.cancelAnimationFrame(audioMeterFrameRef.current);
+      audioMeterFrameRef.current = null;
+    }
+    audioContextRef.current?.close().catch(console.error);
+    audioContextRef.current = null;
+    setMicLevel(0);
   }
 
   async function startRecording() {
@@ -227,10 +330,20 @@ function DictationPage({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       logDebug("麦克风权限已取得");
+      startAudioMeter(stream);
+      startLocalRecording(stream);
 
       const peer = new RTCPeerConnection();
       peerRef.current = peer;
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+      stream.getAudioTracks().forEach((track) => {
+        logDebug("麦克风轨道", {
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+          label: track.label,
+        });
+      });
       peer.onconnectionstatechange = () => {
         logDebug("WebRTC connection state", peer.connectionState);
       };
@@ -254,6 +367,10 @@ function DictationPage({
           "conversation.item.input_audio_transcription.completed"
         ) {
           const transcript = String(message.transcript || "").trim();
+          logDebug("转写完成", {
+            length: transcript.length,
+            text: transcript,
+          });
           if (transcript) {
             setFinalText((current) =>
               [current, transcript].filter(Boolean).join("\n")
@@ -320,6 +437,8 @@ function DictationPage({
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    stopLocalRecording();
+    stopAudioMeter();
     updateRecordingState("finalizing");
     logDebug("已停止麦克风，等待服务端完成最后一段转写");
 
@@ -339,6 +458,8 @@ function DictationPage({
 
   function disconnectRealtime() {
     clearFinalizeTimer();
+    stopAudioMeter();
+    stopLocalRecording();
     channelRef.current?.close();
     peerRef.current?.close();
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -353,6 +474,11 @@ function DictationPage({
     setFinalText("");
     setConfirmedText("");
     setResult(null);
+    if (recordingUrl) {
+      URL.revokeObjectURL(recordingUrl);
+    }
+    setRecordingUrl("");
+    setRecordingMimeType("");
     setError("");
     updateRecordingState("idle");
   }
@@ -429,6 +555,12 @@ function DictationPage({
           <RotateCcw size={17} />
           <span>重置</span>
         </button>
+        <div className="micMeter" title="Microphone level">
+          <span>麦克风</span>
+          <div>
+            <i style={{ width: `${Math.round(micLevel * 100)}%` }} />
+          </div>
+        </div>
         <select value={style} onChange={(event) => setStyle(event.target.value)}>
           <option value="professional">专业工作语言</option>
           <option value="meeting">会议纪要</option>
@@ -439,6 +571,22 @@ function DictationPage({
       </div>
 
       {error && <div className="notice error">{error}</div>}
+
+      {recordingUrl && (
+        <section className="panel recordingPanel">
+          <div className="panelHeader">
+            <h2>录音回放</h2>
+            <button onClick={() => downloadRecording(recordingUrl, recordingMimeType)}>
+              <Download size={16} />
+              <span>下载</span>
+            </button>
+          </div>
+          <div className="recordingBody">
+            <audio controls src={recordingUrl} />
+            <span>{recordingMimeType || "audio"}</span>
+          </div>
+        </section>
+      )}
 
       <div className="dictationGrid">
         <section className="panel">
@@ -765,6 +913,16 @@ function stateLabel(state: RecordingState) {
 function copyText(text: string) {
   if (!text) return;
   navigator.clipboard.writeText(text).catch(console.error);
+}
+
+function downloadRecording(recordingUrl: string, mimeType: string) {
+  const extension = mimeType.includes("mp4") ? "mp4" : "webm";
+  const link = document.createElement("a");
+  link.href = recordingUrl;
+  link.download = `debater-recording-${new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")}.${extension}`;
+  link.click();
 }
 
 createRoot(document.getElementById("root")!).render(

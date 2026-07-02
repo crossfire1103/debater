@@ -492,6 +492,8 @@ function DictationPage({
 
     setIsProcessing(true);
     setError("");
+    setConfirmedText(rawText);
+    logDebug("开始生成专业双语文本", { length: rawText.length });
     try {
       const response = await api<{
         result: ProcessedResult;
@@ -505,11 +507,19 @@ function DictationPage({
         }),
       });
       setResult(response.result);
-      setConfirmedText(rawText);
+      logDebug("专业双语文本生成完成", {
+        title: response.result.summaryTitle,
+        chineseLength: response.result.polishedChinese.length,
+        englishLength: response.result.polishedEnglish.length,
+      });
       await onSaved();
     } catch (processError) {
       setError(
         processError instanceof Error ? processError.message : "处理文字失败。"
+      );
+      logDebug(
+        "专业双语文本生成失败",
+        processError instanceof Error ? processError.message : String(processError)
       );
     } finally {
       setIsProcessing(false);

@@ -149,10 +149,30 @@ export async function processDictation({
     }),
   });
 
-  const output = data.output_text || "";
+  const output = extractResponseText(data);
+  console.log("Dictation processing response", {
+    status: data.status,
+    outputTextLength: output.length,
+    outputTypes: Array.isArray(data.output)
+      ? data.output.map((item) => item.type).join(",")
+      : "",
+  });
+
+  if (!output) {
+    const error = new Error("Text processing returned an empty response.");
+    error.status = 502;
+    error.details = {
+      status: data.status,
+      output: data.output,
+      incomplete_details: data.incomplete_details,
+    };
+    throw error;
+  }
+
   try {
     return JSON.parse(output);
-  } catch {
+  } catch (parseError) {
+    console.warn("Failed to parse structured output", parseError);
     return {
       summaryTitle: "Untitled dictation",
       polishedChinese: output,
@@ -161,4 +181,36 @@ export async function processDictation({
       actionItems: [],
     };
   }
+}
+
+function extractResponseText(data) {
+  if (typeof data.output_text === "string" && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  if (!Array.isArray(data.output)) {
+    return "";
+  }
+
+  const chunks = [];
+  for (const item of data.output) {
+    if (typeof item.content === "string") {
+      chunks.push(item.content);
+      continue;
+    }
+
+    if (!Array.isArray(item.content)) continue;
+
+    for (const content of item.content) {
+      if (typeof content.text === "string") {
+        chunks.push(content.text);
+      } else if (typeof content.output_text === "string") {
+        chunks.push(content.output_text);
+      } else if (typeof content.value === "string") {
+        chunks.push(content.value);
+      }
+    }
+  }
+
+  return chunks.join("").trim();
 }

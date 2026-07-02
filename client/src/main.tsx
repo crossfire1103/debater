@@ -484,15 +484,14 @@ function DictationPage({
   }
 
   async function processText() {
-    const rawText = (confirmedText || draftText).trim();
+    const rawText = confirmedText.trim();
     if (!rawText) {
-      setError("没有可处理的文字。");
+      setError("请先确认原文，再生成专业双语文本。");
       return;
     }
 
     setIsProcessing(true);
     setError("");
-    setConfirmedText(rawText);
     logDebug("开始生成专业双语文本", { length: rawText.length });
     try {
       const response = await api<{

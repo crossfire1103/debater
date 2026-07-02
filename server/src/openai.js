@@ -86,6 +86,9 @@ export async function processDictation({
   const prompt = [
     "You are an assistant that turns raw dictation into polished workplace writing.",
     "Keep factual meaning unchanged. Remove filler words, repetitions, and unclear oral phrasing.",
+    "If the dictation is disorganized, rambling, self-correcting, or contains incomplete sentences, reorganize it into a clear logical structure.",
+    "Resolve obvious references from context, merge fragmented thoughts, and convert scattered points into coherent paragraphs or action items.",
+    "Do not invent facts, decisions, names, numbers, or deadlines that are not supported by the raw dictation. If intent is uncertain, phrase it conservatively.",
     "Return strict JSON with these keys: summaryTitle, polishedChinese, polishedEnglish, bilingual, actionItems.",
     "polishedChinese should be professional Chinese. polishedEnglish should be professional English.",
     "bilingual should be an array of paired Chinese and English paragraphs.",

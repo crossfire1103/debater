@@ -20,6 +20,11 @@ const port = Number(process.env.PORT || 8787);
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || "http://localhost:5173" }));
 app.use(express.json({ limit: "2mb" }));
 
+app.use((req, _res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  next();
+});
+
 function asyncRoute(handler) {
   return async (req, res, next) => {
     try {
@@ -51,7 +56,12 @@ app.post(
 app.post(
   "/api/realtime/session",
   asyncRoute(async (req, res) => {
+    console.log("Creating realtime transcription session", {
+      language: req.body?.language,
+      delay: req.body?.delay,
+    });
     const session = await createRealtimeTranscriptionSession(req.body || {});
+    console.log("Realtime client secret created");
     res.json(session);
   })
 );
@@ -65,6 +75,11 @@ app.post(
       return;
     }
 
+    console.log("Processing dictation", {
+      length: rawText.length,
+      style: req.body?.style,
+      outputMode: req.body?.outputMode,
+    });
     const result = await processDictation({
       rawText,
       style: req.body?.style,

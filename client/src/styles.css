@@ -315,6 +315,37 @@ textarea:focus {
   padding: 16px 28px;
 }
 
+.debugPanel {
+  background: #101712;
+  border-color: #203327;
+  color: #e7efe9;
+}
+
+.debugPanel .panelHeader {
+  border-bottom-color: #24372b;
+}
+
+.debugPanel button {
+  background: #1c2a21;
+  border-color: #314839;
+  color: #e7efe9;
+}
+
+.debugLog {
+  color: #c7d7cd;
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px 14px;
+}
+
+.debugLog p + p {
+  margin-top: 4px;
+}
+
 .historyList {
   display: grid;
   gap: 12px;
